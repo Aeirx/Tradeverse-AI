@@ -95,21 +95,20 @@ def predict_trade_signal(request: TradeRequest):
     if search_results['matches']:
         best_match = search_results['matches'][0]
         headline = best_match['metadata']['text']
-        # Pinecone cosine scores are usually 0 to 1. We shift it to -1 to +1 for our math engine.
-        live_news_score = (best_match['score'] * 2) - 1.0 
         print(f"📡 PINECONE MEMORY: Found headline -> '{headline}'")
     else:
         print("📡 PINECONE MEMORY: No news found for this ticker.")
-        live_news_score = 0.0 # Neutral if we have no news
+        headline = ""
         
-    # --- 2. RUN THE QUANTITATIVE ENGINE ---
+    # --- 2. RUN THE QUANTITATIVE ENGINE WITH FINBERT ---
     decision_data = run_ensemble_model(
+        symbol=request.symbol,
         weights={
             "sentiment": request.weights.sentiment,
             "ma": request.weights.ma,
             "rsi": request.weights.rsi
         },
-        live_news_score=live_news_score
+        headline=headline
     )
     
     raw_signal = decision_data["signal"] 
