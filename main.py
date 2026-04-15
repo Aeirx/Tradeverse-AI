@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from pinecone import Pinecone
+from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
 
 # 1. Imports from your own files
@@ -22,6 +23,15 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 # 3. Initialize the Server
 app = FastAPI(title="Tradeverse AI Brain")
 
+# --- ADD THIS CORS BLOCK ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"], # Explicitly trust your React frontend!
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 4. Define the formats for incoming requests
 class SearchQuery(BaseModel):
     text: str
@@ -30,6 +40,10 @@ class WeightConfig(BaseModel):
     sentiment: float
     ma: float
     rsi: float
+    
+class TradeRequest(BaseModel):
+    symbol: str
+    weights: WeightConfig
 
 # --- ENDPOINTS ---
 
@@ -64,15 +78,45 @@ def search_news(query: SearchQuery):
         "confidence_score": round(best_match['score'], 2)
     }
 
-@app.post("/trade-signal")
-def get_custom_trade_signal(weights: WeightConfig):
-    print(f"📡 Received custom user weights: {weights.model_dump()}")
+@app.post("/api/predict")
+def predict_trade_signal(request: TradeRequest): 
+    print(f"\n🚀 AI Engine activated for {request.symbol}!")
     
-    # Pass the user's exact UI slider values directly into your math engine!
-    decision = run_ensemble_model({
-        "sentiment": weights.sentiment,
-        "ma": weights.ma,
-        "rsi": weights.rsi
-    })
+    # --- 1. SEARCH PINECONE FOR REAL NEWS ---
+    query_text = f"financial news and market updates for {request.symbol}"
+    query_vector = model.encode(query_text).tolist()
     
-    return decision
+    search_results = index.query(
+        vector=query_vector,
+        top_k=1,
+        include_metadata=True
+    )
+    
+    if search_results['matches']:
+        best_match = search_results['matches'][0]
+        headline = best_match['metadata']['text']
+        # Pinecone cosine scores are usually 0 to 1. We shift it to -1 to +1 for our math engine.
+        live_news_score = (best_match['score'] * 2) - 1.0 
+        print(f"📡 PINECONE MEMORY: Found headline -> '{headline}'")
+    else:
+        print("📡 PINECONE MEMORY: No news found for this ticker.")
+        live_news_score = 0.0 # Neutral if we have no news
+        
+    # --- 2. RUN THE QUANTITATIVE ENGINE ---
+    decision_data = run_ensemble_model(
+        weights={
+            "sentiment": request.weights.sentiment,
+            "ma": request.weights.ma,
+            "rsi": request.weights.rsi
+        },
+        live_news_score=live_news_score
+    )
+    
+    raw_signal = decision_data["signal"] 
+    confidence = min(round(abs(decision_data["final_score"]) * 100, 1) + 60.0, 99.9)
+
+    return {
+        "signal": raw_signal,
+        "confidence": confidence,
+        "symbol": request.symbol
+    }

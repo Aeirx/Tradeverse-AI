@@ -1,13 +1,6 @@
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-
 print("📊 Booting up the Weighted Quant Ensemble Engine...")
 
-# --- THE 3 INDEPENDENT ALGORITHMS ---
-
-def get_sentiment_score():
-    # Imagine this is your Vader AI reading Finnhub news
-    # It reads great news today, so it votes highly positive.
-    return 0.80  
+# --- THE TECHNICAL ALGORITHMS ---
 
 def get_moving_average_score():
     # Imagine this reads your market_data.csv
@@ -21,21 +14,20 @@ def get_rsi_score():
 
 
 # --- THE MASTER DECISION ENGINE ---
-
-def run_ensemble_model(weights):
+# Notice it now requires 'live_news_score' from Pinecone!
+def run_ensemble_model(weights, live_news_score):
     print("\n⚖️ Gathering votes from all Trading Algorithms...")
 
     # 1. Get raw scores from the algos
-    sent_score = get_sentiment_score()
+    sent_score = live_news_score  # <-- This is now REAL AI data!
     ma_score = get_moving_average_score()
     rsi_score = get_rsi_score()
 
-    print(f"📰 News Sentiment Algo:  {sent_score:+.2f}")
-    print(f"📈 Moving Average Algo:  {ma_score:+.2f}")
-    print(f"📊 RSI Momentum Algo:    {rsi_score:+.2f}")
+    print(f"📰 Real AI News Sentiment:  {sent_score:+.2f}")
+    print(f"📈 Moving Average Algo:     {ma_score:+.2f}")
+    print(f"📊 RSI Momentum Algo:       {rsi_score:+.2f}")
 
     # 2. Apply the user's custom weights!
-    # (Score * Weight)
     final_weighted_score = (
         (sent_score * weights['sentiment']) +
         (ma_score * weights['ma']) +
@@ -63,12 +55,10 @@ def run_ensemble_model(weights):
 
 # --- TEST THE ENGINE ---
 if __name__ == "__main__":
-    # Test Case 1: The user trusts the Technicals (Moving Averages) over the News
-    # 30% Sentiment, 60% MA, 10% RSI
     user_weights = {
         "sentiment": 0.30,
         "ma": 0.60,
         "rsi": 0.10
     }
-    
-    run_ensemble_model(user_weights)
+    # Passing a dummy live score of 0.80 just for the direct file test
+    run_ensemble_model(user_weights, live_news_score=0.80)
